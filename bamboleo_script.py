@@ -3,217 +3,166 @@
 import rospy
 import math
 import argparse
-from ultralytics import YOLO
 import cv2
 import math
 import os
+import subprocess
 from intera_motion_interface import MotionTrajectory, MotionWaypoint, MotionWaypointOptions
 from intera_motion_msgs.msg import TrajectoryOptions
 from geometry_msgs.msg import PoseStamped
 from intera_interface import Limb
+from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import Image as Image
 
 PI = 3.1416
+txt_folder = "runs/detect/predict"
+image_folder = "takenImages"
+bridge = CvBridge()
+
 ########## OBJECT DETECTION#############
-def is_video_file(filename):
-    video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
-    _, ext = os.path.splitext(filename)
-    return ext.lower() in video_extensions
 
-def process_image(frame, block_model, plate_model):
-    # 對圖片進行偵測
-    block_results = block_model.predict(
-        source=frame,
-        show=False,
-        save=True,
-        conf=0.5
-    )
+def get_next_image_name(folder):
+    """
+    Bestimmt den nächsten verfügbaren Dateinamen für ein Bild.
 
-    plate_results = plate_model.predict(
-        source=frame,
-        show=False,
-        save=True,
-        conf=0.5
-    )
+    :param folder: Der Ordner, in dem die Bilder gespeichert werden.
+    :return: Der Pfad für die nächste Bilddatei.
+    """
+    # Prüfe alle Dateien im Ordner und filtere nach Bildformaten
+    image_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']
+    existing_files = [
+        f for f in os.listdir(folder)
+        if os.path.splitext(f)[1].lower() in image_extensions
+    ]
 
-    # 解析偵測結果
-    current_blocks = []
-    current_plates = []
+    # Extrahiere numerische IDs aus den Dateinamen
+    image_numbers = [
+        int(os.path.splitext(f)[0][3:]) for f in existing_files if f.startswith("img") and f[3:].isdigit()
+    ]
 
-    for result in block_results:
-        for detection in result.boxes.data.tolist():
-            x1, y1, x2, y2, confidence, class_id = detection
-            block = {
-                "type": block_model.names[int(class_id)],
-                "position": {
-                    "x": (x1 + x2) / 2,
-                    "y": (y1 + y2) / 2,
-                },
-                "confidence": round(confidence, 2),
-            }
-            current_blocks.append(block)
+    # Bestimme die nächste freie Nummer
+    next_number = max(image_numbers, default=0) + 1
+    return os.path.join(folder, f"img{next_number:03d}.png")  # Nummer mit führenden Nullen
 
-    for result in plate_results:
-        for detection in result.boxes.data.tolist():
-            x1, y1, x2, y2, confidence, class_id = detection
-            plate = {
-                "type": plate_model.names[int(class_id)],
-                "position": {
-                    "x": (x1 + x2) / 2,
-                    "y": (y1 + y2) / 2,
-                },
-                "length": y2 - y1,
-                "width": x2 - x1,
-                "confidence": round(confidence, 2),
-            }
-            current_plates.append(plate)
 
-    return current_blocks, current_plates
+def take_image(msg):
 
-def draw_detections(frame, blocks, plates):
-    if not plates:
-        return frame
-
-    plate = plates[0]
-    circle_center_x = plate['position']['x']
-    circle_center_y = plate['position']['y']
-    circle_image_diameter = max(plate['length'], plate['width'])
-    circle_real_diameter = 36  # cm
-
-    for block in blocks:
-        object_center_x = block['position']['x']
-        object_center_y = block['position']['y']
-
-        # Calculate the distance in the image
-        image_distance = math.sqrt(
-            (circle_center_x - object_center_x) ** 2 +
-            (circle_center_y - object_center_y) ** 2
-        )
-
-        # Calculate the scale ratio
-        scale_ratio = circle_real_diameter / circle_image_diameter
-
-        # Calculate the real-world distance (cm)
-        real_distance = image_distance * scale_ratio
-
-        # Calculate x-axis and y-axis distances (cm)
-        x_axis_image_distance = abs(circle_center_x - object_center_x)
-        y_axis_image_distance = abs(circle_center_y - object_center_y)
-        x_axis_real_distance = x_axis_image_distance * scale_ratio
-        y_axis_real_distance = y_axis_image_distance * scale_ratio
-
-        # Draw circles and connecting line
-        cv2.circle(frame, (int(circle_center_x), int(circle_center_y)),
-                   5, (0, 0, 255), -1)
-        cv2.circle(frame, (int(object_center_x), int(object_center_y)),
-                   5, (0, 0, 255), -1)
-        cv2.line(frame, (int(circle_center_x), int(circle_center_y)),
-                 (int(object_center_x), int(object_center_y)), (0, 0, 255), 2)
-
-        # Draw arrow pointing to the x-axis direction
-        x_arrow_end = (int(object_center_x), int(circle_center_y))
-        cv2.arrowedLine(frame,
-                        (int(circle_center_x), int(circle_center_y)),
-                        x_arrow_end, (0, 255, 0), 2, tipLength=0.2)
-
-        # Draw arrow pointing to the y-axis direction
-        y_arrow_end = (int(circle_center_x), int(object_center_y))
-        cv2.arrowedLine(frame,
-                        (int(circle_center_x), int(circle_center_y)),
-                        y_arrow_end, (255, 255, 0), 2, tipLength=0.2)
-
-        # Set text position (middle-right offset slightly up)
-        text_start_x = frame.shape[1] - 250  # 靠右側，距離右邊框 200 px
-        text_start_y = frame.shape[0] // 2 - 50  # 從畫面中間往上 50 px
-
-        # Display text on the right middle part of the image
-        cv2.putText(frame, f"Distance: {real_distance:.2f} cm",
-                    (text_start_x, text_start_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, f"dx: {x_axis_real_distance:.2f} cm",
-                    (text_start_x, text_start_y + 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame, f"dy: {y_axis_real_distance:.2f} cm",
-                    (text_start_x, text_start_y + 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-
-    return frame
-
-def detect(opt):
-    # Load pretrained YOLO models
-    block_model = YOLO("block.pt")
-    plate_model = YOLO("plate.pt")
-
-    if opt.source == "camera":
-        # Process camera type
-        cap = cv2.VideoCapture(0)
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            current_blocks, current_plates = process_image(frame, block_model, plate_model)
-            frame = draw_detections(frame, current_blocks, current_plates)
-
-            cv2.imshow("Detections", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        cap.release()
-
-    elif is_video_file(opt.source):
-        # Process video type
-        cap = cv2.VideoCapture(opt.source)
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        output_path = 'labeled_' + opt.source
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
-
-        frame_count = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame_count += 1
-            print(f"Processing frame {frame_count}/{total_frames}")
-
-            current_blocks, current_plates = process_image(frame, block_model, plate_model)
-            frame = draw_detections(frame, current_blocks, current_plates)
-
-            cv2.imshow("Detections", frame)
-            out.write(frame)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        cap.release()
-        out.release()
-        print(f"Video processing is complete and has been saved to {output_path}")
-
+    print("Received an image!")
+    try:
+        # Konvertiere ROS Image Message zu OpenCV2
+        cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
+    except Exception as e:
+        print(f"Fehler beim Konvertieren des ROS-Bildes: {e}")
     else:
-        # Process image type
-        frame = cv2.imread(opt.source)
-        if frame is None:
-            print(f"Can't read image: {opt.source}")
-            return
+        # Bestimme den nächsten Dateinamen
+        image_path = get_next_image_name(image_folder)
 
-        current_blocks, current_plates = process_image(frame, block_model, plate_model)
-        frame = draw_detections(frame, current_blocks, current_plates)
+        # Speichere das Bild
+        cv2.imwrite(image_path, cv2_img)
+        print(f"Bild gespeichert: {image_path}")
+        image_taken = True  # Setze das Flag auf True
+        rospy.signal_shutdown("Bild aufgenommen und gespeichert")
 
-        # end
-        cv2.imshow("Detections", frame)
-        cv2.waitKey(0)
+def parse_detection_txt(txt_path):
+    """
+    Liest eine YOLO-TXT-Datei ein und gibt eine Liste der erkannten Objekte zurück.
 
-        # save result
-        output_path = 'labeled_' + opt.source
-        cv2.imwrite(output_path, frame)
-        print(f"Image processing is complete and has been saved to {output_path}")
+    :param txt_path: Pfad zur TXT-Datei.
+    :return: Liste von Objekten mit Eigenschaften.
+    """
+    objects = []
 
-    cv2.destroyAllWindows()
+    if not os.path.exists(txt_path):
+        print(f"Datei {txt_path} wurde nicht gefunden!")
+        return objects
+
+    with open(txt_path, 'r') as file:
+        lines = file.readlines()
+
+        for line in lines:
+            data = line.strip().split()  # Annahme: Daten sind Leerzeichen-separiert
+            if len(data) < 6:
+                print(f"Zeile ungültig: {line}")
+                continue
+
+            class_id, x_center, y_center, width, height, confidence = map(float, data[:6])
+
+            # Objekt-Eigenschaften zusammenstellen
+            obj = {
+                "id": int(class_id),  # Klassen-ID als Integer
+                "type": f"Type_{int(class_id)}",  # Klassenname (ersetze durch echte Namen, falls verfügbar)
+                "position": {
+                    "x": x_center,
+                    "y": y_center
+                },
+                "size": {
+                    "width": width,
+                    "height": height
+                },
+                "confidence": confidence
+            }
+            objects.append(obj)
+
+    return objects
+
+def get_latest_txt_file(folder_path):
+    """
+    Findet die neueste TXT-Datei in einem Ordner.
+
+    :param folder_path: Pfad zum Ordner mit TXT-Dateien.
+    :return: Pfad zur neuesten TXT-Datei oder None, wenn keine Datei gefunden wurde.
+    """
+    if not os.path.exists(folder_path):
+        print(f"Ordner {folder_path} wurde nicht gefunden!")
+        return None
+
+    txt_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.txt')]
+    if not txt_files:
+        print("Keine TXT-Dateien im Ordner gefunden!")
+        return None
+
+    # Finde die Datei mit dem neuesten Änderungszeitstempel
+    latest_file = max(txt_files, key=os.path.getmtime)
+    return latest_file
+
+def parse_latest_detection(txt_folder):
+    """
+    Lädt die neueste TXT-Datei im Ordner und gibt die erkannten Objekte zurück.
+
+    :param txt_folder: Pfad zum Ordner mit TXT-Dateien.
+    :return: Liste der erkannten Objekte.
+    """
+    latest_file = get_latest_txt_file(txt_folder)
+    if latest_file is None:
+        print("Keine gültige TXT-Datei gefunden.")
+        return []
+
+    print(f"Neueste Datei: {latest_file}")
+    return parse_detection_txt(latest_file)
+
+def get_latest_image(folder_path):
+    """
+    Findet die neueste Bilddatei in einem Ordner.
+
+    :param folder_path: Pfad zum Ordner mit Bildern.
+    :return: Pfad zur neuesten Bilddatei oder None, wenn keine Datei gefunden wurde.
+    """
+    if not os.path.exists(folder_path):
+        print(f"Ordner {folder_path} wurde nicht gefunden!")
+        return None
+
+    # Unterstützte Bildformate
+    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+    image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path)
+                   if os.path.splitext(f)[1].lower() in image_extensions]
+
+    if not image_files:
+        print("Keine Bilddateien im Ordner gefunden!")
+        return None
+
+    # Finde die Datei mit dem neuesten Änderungszeitstempel
+    latest_file = max(image_files, key=os.path.getmtime)
+    return latest_file
 
 ########### ROBOT MOVEMENT #############
 ### Robot moves to the following defined Position and Orientation
@@ -244,7 +193,6 @@ def move_to_position(position, orientation=None, tip_name='right_hand', timeout=
 
     result = traj.send_trajectory(timeout=timeout)
     return result and result.result
-
 # def move_to_position_fixed_joints_5_6(position, orientation=None, tip_name='right_hand', timeout=None):
 #     """
 #     Bewegt den TCP zur Zielposition, während die letzten beiden Joints (5 und 6) relativ zueinander fixiert bleiben.
@@ -299,7 +247,6 @@ def move_to_position(position, orientation=None, tip_name='right_hand', timeout=
 #
 #     result = traj.send_trajectory(timeout=timeout)
 #     return result and result.result
-
 def get_current_position(tip_name='right_hand'):
     """
     Gibt die aktuelle Ist-Position und Orientierung des Roboters zurück.
@@ -335,7 +282,6 @@ def get_current_position(tip_name='right_hand'):
     rospy.loginfo(f"Current Orientation is: {current_position['orientation']}")
 
     return current_position
-
 
 def move_joints_to_angles(joint_angles, speed_ratio=0.5, accel_ratio=0.5, timeout=None):
     """
@@ -384,6 +330,10 @@ def get_current_joint_angles():
 def main():
     rospy.init_node('multi_pose_execution', anonymous=True)
 
+###############################################
+############## Initialisation #################
+###############################################
+
 ### Abfrage der Limbnames
     # limb = Limb()
     # limbnames = limb.joint_names()
@@ -419,12 +369,65 @@ def main():
     else:
         rospy.logerr("Fehler beim Bewegen der Gelenke.")
 
-
 ### Get current Position
     current_pose = get_current_position()
 
 ### Aktuelle Gelenkwinkel abrufen
     current_angles = get_current_joint_angles()
+
+###############################################
+################# Get Image ###################
+###############################################
+
+    # Definiere das Bild-Topic
+    image_topic = "/io/internal_camera/right_hand_camera/image_raw"
+    # Setze den Subscriber auf das Bild-Topic mit Callback
+    rospy.Subscriber(image_topic, Image, take_image)
+    print("Warte auf ein Bild...")
+    # Spin bis shutdown (z. B. manuell mit Ctrl+C)
+    rospy.spin()
+
+###############################################
+################# Detection ###################
+###############################################
+
+    # finden des neuesten zu analyiserenden Bildes
+    latest_image = get_latest_image(image_folder)
+    if latest_image is None:
+        rospy.logerr("Kein gültiges Bild gefunden!")
+        return
+
+    rospy.loginfo(f"Analysiere das neueste Bild: {latest_image}")
+
+    # Führe detect.py mit dem neuesten Bild aus
+    try:
+        subprocess.run(
+            ["python3", "detect.py", "--source", latest_image],
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        rospy.logerr(f"Fehler beim Ausführen von detect.py: {e}")
+        return
+
+    rospy.loginfo("Analyse abgeschlossen. Ergebnisse befinden sich im Ordner 'runs/detect/predict'")
+
+    # Finden der neuesten erstellten Textdatei
+    detected_objects = parse_latest_detection(txt_folder)
+    rospy.loginfo(f"Erkannte Objekte: {detected_objects}")
+
+    # Output der Erkannten Objekte
+    for obj in detected_objects:
+        rospy.loginfo(
+            f"Objekt ID: {obj['id']}, Typ: {obj['type']}, Position: {obj['position']}, Konfidenz: {obj['confidence']}")
+
+###############################################
+################## Gameplay ###################
+###############################################
+
+### Move down Gripper 90°
+### keep Orientation
+
+### Move to Positions, open/close gripper
 
 if __name__ == '__main__':
     main()
