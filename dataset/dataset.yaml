@@ -1,0 +1,5 @@
+train: C:\Users\hcjoh\Desktop\113-1\ComputerVision\project\dataset\train
+val: C:\Users\hcjoh\Desktop\113-1\ComputerVision\project\dataset\val
+
+nc: 9
+names: ['cone', 'cube', 'cuboid', 'cylinder flat', 'cylinder up', 'pyramid', 'roof', 'roof with hole', 'u']

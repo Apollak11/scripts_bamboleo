@@ -1,0 +1,5 @@
+train: C:\Users\hcjoh\Desktop\113-1\ComputerVision\project\seg\dataset\train
+val: C:\Users\hcjoh\Desktop\113-1\ComputerVision\project\seg\dataset\val
+
+nc: 1
+names: ['plate']

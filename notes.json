@@ -1,0 +1,45 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "cone"
+    },
+    {
+      "id": 1,
+      "name": "cube"
+    },
+    {
+      "id": 2,
+      "name": "cuboid"
+    },
+    {
+      "id": 3,
+      "name": "cylinder flat"
+    },
+    {
+      "id": 4,
+      "name": "cylinder up"
+    },
+    {
+      "id": 5,
+      "name": "pyramid"
+    },
+    {
+      "id": 6,
+      "name": "roof"
+    },
+    {
+      "id": 7,
+      "name": "roof with hole"
+    },
+    {
+      "id": 8,
+      "name": "u"
+    }
+  ],
+  "info": {
+    "year": 2024,
+    "version": "1.0",
+    "contributor": "Label Studio"
+  }
+}

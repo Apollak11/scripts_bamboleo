@@ -1,0 +1,9 @@
+cone
+cube
+cuboid
+cylinder flat
+cylinder up
+pyramid
+roof
+roof with hole
+u
