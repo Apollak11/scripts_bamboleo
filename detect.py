@@ -4,6 +4,10 @@ import cv2
 import math
 import os
 
+base_folder = os.path.dirname(os.path.abspath(__file__))
+scripts_folder = os.path.join(base_folder, "src/intera_sdk/intera_examples/scripts")
+os.chdir(scripts_folder)
+
 def is_video_file(filename):
     video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
     _, ext = os.path.splitext(filename)
@@ -15,6 +19,7 @@ def process_image(frame, block_model, plate_model):
         source=frame,
         show=False,
         save=True,
+        save_dir=f"{scripts_folder}/runs/detect/predict",
         conf=0.5
     )
     
@@ -22,6 +27,7 @@ def process_image(frame, block_model, plate_model):
         source=frame,
         show=False,
         save=True,
+        save_dir=f"{scripts_folder}/runs/detect/predict",
         conf=0.5
     )
     
@@ -58,9 +64,6 @@ def process_image(frame, block_model, plate_model):
             current_plates.append(plate)
             
     return current_blocks, current_plates
-
-import cv2
-import math
 
 def draw_detections(frame, blocks, plates):
     if not plates:
@@ -134,8 +137,8 @@ def draw_detections(frame, blocks, plates):
 
 def detect(opt):
     # Load pretrained YOLO models
-    block_model = YOLO("block.pt")
-    plate_model = YOLO("plate.pt")
+    block_model = YOLO(f"{scripts_folder}/block.pt")
+    plate_model = YOLO(f"{scripts_folder}/plate.pt")
 
     if opt.source == "camera":
         # Process camera type

@@ -6,6 +6,7 @@ import argparse
 import cv2
 import os
 import subprocess
+import time
 from intera_motion_interface import MotionTrajectory, MotionWaypoint, MotionWaypointOptions
 from intera_motion_msgs.msg import TrajectoryOptions
 from geometry_msgs.msg import PoseStamped
@@ -13,8 +14,11 @@ from intera_interface import Limb
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as Image
 
+
+
 PI = 3.1416
-scripts_folder = "./src/intera_sdk/intera_examples/scripts"
+base_folder = os.path.dirname(os.path.abspath(__file__))
+scripts_folder = os.path.join(base_folder, "src/intera_sdk/intera_examples/scripts")
 txt_folder = f"{scripts_folder}/runs/detect/predict"
 image_folder = f"{scripts_folder}/takenImages"
 bridge = CvBridge()
@@ -28,6 +32,8 @@ def get_next_image_name(folder):
     :param folder: The folder where images are saved.
     :return: The path for the next image file.
     """
+    print(f"Existing files in {folder}: {os.listdir(folder)}")
+
     # Check all files in the folder and filter by image formats
     image_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']
     existing_files = [
@@ -66,7 +72,9 @@ def take_image(msg):
         # Save the image
         cv2.imwrite(image_path, cv2_img)
         print(f"Image saved: {image_path}")
+        time.sleep(2)  # so the new image gets saved appropriately before further execution of code
         rospy.signal_shutdown("Image captured and saved")
+
 
 def parse_detection_txt(txt_path):
     """
