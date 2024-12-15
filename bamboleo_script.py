@@ -17,8 +17,8 @@ from sensor_msgs.msg import Image as Image
 
 
 PI = 3.1416
-base_folder = os.path.dirname(os.path.abspath(__file__))
-scripts_folder = os.path.join(base_folder, "src/intera_sdk/intera_examples/scripts")
+#base_folder = os.path.dirname(os.path.abspath(__file__))"src/intera_sdk/intera_examples/scripts"
+scripts_folder = os.path.dirname(os.path.abspath(__file__))
 txt_folder = f"{scripts_folder}/runs/detect/predict"
 image_folder = f"{scripts_folder}/takenImages"
 bridge = CvBridge()
@@ -32,23 +32,43 @@ def get_next_image_name(folder):
     :param folder: The folder where images are saved.
     :return: The path for the next image file.
     """
+    # Ensure the folder exists
+    os.makedirs(folder, exist_ok=True)
+
+    # Debugging: List existing files in the folder
+    print(f"Checking directory: {folder}")
     print(f"Existing files in {folder}: {os.listdir(folder)}")
 
-    # Check all files in the folder and filter by image formats
+    # Supported image extensions
     image_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']
+
+    # Filter files in the folder
     existing_files = [
         f for f in os.listdir(folder)
-        if os.path.splitext(f)[1].lower() in image_extensions
+        if os.path.splitext(f)[1].lower() in image_extensions and f.startswith("img")
     ]
+    print(f"Filtered image files: {existing_files}")
 
     # Extract numerical IDs from filenames
-    image_numbers = [
-        int(os.path.splitext(f)[0][3:]) for f in existing_files if f.startswith("img") and f[3:].isdigit()
-    ]
+    image_numbers = []
+    for f in existing_files:
+        try:
+            number = int(os.path.splitext(f)[0][3:])  # Extract number after "img"
+            image_numbers.append(number)
+        except ValueError:
+            print(f"Skipped invalid file: {f}")  # Debug invalid files
+
+    # Debug: Print extracted numbers
+    print(f"Extracted image numbers: {image_numbers}")
 
     # Determine the next available number
     next_number = max(image_numbers, default=0) + 1
-    return os.path.join(folder, f"img{next_number:03d}.png")  # Number with leading zeros
+    next_image_path = os.path.join(folder, f"img{next_number:03d}.png")
+
+    # Debug: Print the next image name
+    print(f"Next image name: {next_image_path}")
+
+    return next_image_path
 
 def take_image(msg):
     """
@@ -74,7 +94,6 @@ def take_image(msg):
         print(f"Image saved: {image_path}")
         time.sleep(2)  # so the new image gets saved appropriately before further execution of code
         rospy.signal_shutdown("Image captured and saved")
-
 
 def parse_detection_txt(txt_path):
     """

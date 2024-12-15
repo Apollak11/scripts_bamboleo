@@ -4,8 +4,7 @@ import cv2
 import math
 import os
 
-base_folder = os.path.dirname(os.path.abspath(__file__))
-scripts_folder = os.path.join(base_folder, "src/intera_sdk/intera_examples/scripts")
+scripts_folder = os.path.dirname(os.path.abspath(__file__))
 os.chdir(scripts_folder)
 
 def is_video_file(filename):
