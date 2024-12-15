@@ -10,7 +10,7 @@ import time
 from intera_motion_interface import MotionTrajectory, MotionWaypoint, MotionWaypointOptions
 from intera_motion_msgs.msg import TrajectoryOptions
 from geometry_msgs.msg import PoseStamped
-from intera_interface import Limb
+from intera_interface import Limb, Gripper, RobotParams
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as Image
 
@@ -312,6 +312,61 @@ def get_current_joint_angles():
     rospy.loginfo(f"Current joint angles (in units of Pi): {current_angles_pi}")
     return current_angles_pi
 
+
+def limb_neutral_pos():
+    """
+    Moves the robot limb to a neutral position.
+    """
+    print('[DEBUG] ==> limb_neutral_pos')
+    robot_params = RobotParams()
+    limb_names = robot_params.get_limb_names()
+    joint_names = robot_params.get_joint_names(limb_names[0])
+    limb = Limb(limb=limb_names[0])
+    print('[DEBUG] Current endpoint pose:', limb.endpoint_pose())
+    # Set joint speed
+    limb.set_joint_position_speed(0.1)
+    # Move to neutral position
+    limb.move_to_neutral(speed=0.2)
+
+
+def gripper_init():
+    """
+    Initializes and calibrates the gripper, then opens and closes it.
+    """
+    print('[DEBUG] ==> gripper_init')
+    gripper = Gripper()
+    gripper.reboot()
+    time.sleep(5)
+    gripper.calibrate()
+    while not gripper.is_ready():
+        print('.', end='', flush=True)
+        time.sleep(0.1)
+    if gripper.is_ready():
+        print('\n[DEBUG] Closing gripper...')
+        gripper.close()
+        time.sleep(2)
+        print('[DEBUG] Opening gripper...')
+        gripper.open()
+    else:
+        print('[DEBUG] Gripper not ready.')
+
+
+def gripper_control(action: str):
+    """
+    Controls the gripper (open or close).
+
+    :param action: Action to perform ('open' or 'close').
+    """
+    print('[DEBUG] ==> gripper_controle')
+    gripper = Gripper()
+    if action == 'open':
+        gripper.open()
+    elif action == 'close':
+        gripper.close()
+    else:
+        print(f'[DEBUG] Invalid action: {action}')
+
+
 def main():
     rospy.init_node('multi_pose_execution', anonymous=True)
 
@@ -319,6 +374,10 @@ def main():
 ############## Initialization #################
 ###############################################
 
+    print('[INFO] Moving limb to neutral position...')
+    limb_neutral_pos()
+    print('[INFO] Initializing and testing gripper...')
+    gripper_init()
     # Example query of limb names
     # limb = Limb()
     # limbnames = limb.joint_names()
@@ -414,6 +473,10 @@ def main():
 ################## Gameplay ###################
 ###############################################
 
+    print('[INFO] Moving limb to neutral position...')
+    limb_neutral_pos()
+    gripper_control("close")
+    gripper_control("open")
     # Move the gripper down 90°
     # Keep the orientation constant
     # You can add specific movement commands here based on the detected objects
