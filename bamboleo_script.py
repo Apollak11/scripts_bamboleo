@@ -15,11 +15,13 @@ from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as Image
 
 
-
 PI = 3.1416
-#base_folder = os.path.dirname(os.path.abspath(__file__))"src/intera_sdk/intera_examples/scripts"
+image_rotation = 0.125 # a.k.a.:j_0 rotation
+default_gripper_waypoint = {'position': [0.58, -0.01, 0.4], 'orientation': [0.97915, 0.2031, -0.0024, 0.0019]}
+
+
 scripts_folder = os.path.dirname(os.path.abspath(__file__))
-txt_folder = f"{scripts_folder}/runs/detect/predict"
+txt_base_folder = f"{scripts_folder}/runs/detect"
 image_folder = f"{scripts_folder}/takenImages"
 bridge = CvBridge()
 
@@ -86,14 +88,44 @@ def take_image(msg):
     except Exception as e:
         print(f"Error converting ROS image: {e}")
     else:
+        # Rotate the image by 0.125 * PI counterclockwise
+        rotated_img = rotate_image(cv2_img, image_rotation * PI)
+
         # Determine the next filename
         image_path = get_next_image_name(image_folder)
 
-        # Save the image
-        cv2.imwrite(image_path, cv2_img)
+        # Save the rotated image
+        cv2.imwrite(image_path, rotated_img)
         print(f"Image saved: {image_path}")
-        time.sleep(2)  # so the new image gets saved appropriately before further execution of code
+        time.sleep(5)  # so the new image gets saved appropriately before further execution of code
         rospy.signal_shutdown("Image captured and saved")
+
+def rotate_image(image, angle_rad):
+    """
+    since we take the image with a rotation (because we cant set up the table otherwise)
+    we need to rotate the image:
+    Rotates an image counterclockwise by a given angle in radians.
+
+    :param image: The input image (OpenCV format).
+    :param angle_rad: The rotation angle in radians.
+    :return: The rotated image.
+    """
+    # Convert angle from radians to degrees
+    angle_deg = angle_rad * (180 / PI)
+
+    # Get the image dimensions
+    (h, w) = image.shape[:2]
+
+    # Get the center of the image
+    center = (w // 2, h // 2)
+
+    # Compute the rotation matrix
+    rotation_matrix = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+
+    # Perform the rotation
+    rotated_image = cv2.warpAffine(image, rotation_matrix, (w, h))
+
+    return rotated_image
 
 def parse_detection_txt(txt_path):
     """
@@ -195,6 +227,37 @@ def get_latest_image(folder_path):
     # Find the file with the latest modification timestamp
     latest_file = max(image_files, key=os.path.getmtime)
     return latest_file
+
+def get_latest_predict_folder(base_folder):
+    """
+    Finds the folder with the highest numeric suffix in the format 'predict', 'predict2', ..., 'predictN'.
+
+    :param base_folder: The base directory where 'predict' folders are located.
+    :return: The path to the folder with the highest number, or the base directory if no 'predict' folders exist.
+    """
+    # List all subdirectories in the base folder
+    subfolders = [f for f in os.listdir(base_folder) if os.path.isdir(os.path.join(base_folder, f))]
+
+    # Filter directories starting with 'predict'
+    predict_folders = [f for f in subfolders if f.startswith("predict")]
+
+    # Extract numbers from folder names
+    predict_numbers = []
+    for folder in predict_folders:
+        suffix = folder[7:]  # Everything after "predict"
+        if suffix.isdigit():  # Check if the suffix is a number
+            predict_numbers.append(int(suffix))
+        elif folder == "predict":  # Handle the base 'predict' folder without a number
+            predict_numbers.append(0)
+
+    # Find the highest number
+    if predict_numbers:
+        max_number = max(predict_numbers)
+        latest_folder = f"predict{max_number}" if max_number > 0 else "predict"
+        return os.path.join(base_folder, latest_folder)
+    else:
+        # Return the base folder if no 'predict' folders exist
+        return base_folder
 
 ########### ROBOT MOVEMENT #############
 ### Robot moves to the following defined Position and Orientation
@@ -312,22 +375,41 @@ def get_current_joint_angles():
     rospy.loginfo(f"Current joint angles (in units of Pi): {current_angles_pi}")
     return current_angles_pi
 
+def gripper_neutral_pos():
+    #Adjust all values here
+    target_joint_angles = {
+        'right_j0': 0.125 * PI,  # Base rotation
+        'right_j1': -0.05 * PI,  # Shoulder movement
+        'right_j2': -0.5 * PI,  # Elbow
+        'right_j3': 0.5 * PI,  # Wrist 1
+        'right_j4': 0.45 * PI,  # Wrist 2
+        'right_j5': 0.5 * PI,  # Wrist 3
+        'right_j6': 1.05 * PI  # End effector rotation
+    }
 
-def limb_neutral_pos():
-    """
-    Moves the robot limb to a neutral position.
-    """
-    print('[DEBUG] ==> limb_neutral_pos')
-    robot_params = RobotParams()
-    limb_names = robot_params.get_limb_names()
-    joint_names = robot_params.get_joint_names(limb_names[0])
-    limb = Limb(limb=limb_names[0])
-    print('[DEBUG] Current endpoint pose:', limb.endpoint_pose())
-    # Set joint speed
-    limb.set_joint_position_speed(0.1)
-    # Move to neutral position
-    limb.move_to_neutral(speed=0.2)
+    move_joints_to_angles(target_joint_angles)
 
+def camera_neutral_pos():
+    target_joint_angles = {
+        'right_j0': image_rotation * PI,  # Base rotation, global variable image_rotation
+        'right_j1': -0.05 * PI,  # Shoulder movement
+        'right_j2': -0.5 * PI,  # Elbow
+        'right_j3': 0.5 * PI,  # Wrist 1
+        'right_j4': 0.45 * PI,  # Wrist 2
+        'right_j5': 0.0 * PI,  # Wrist 3
+        'right_j6': 1.05 * PI  # End effector rotation
+    }
+    # ## Peer-Oles angles
+    # target_joint_angles = {
+    #     'right_j0': 0.125 * PI,  # Base rotation
+    #     'right_j1': -0.0 * PI,  # Shoulder movement
+    #     'right_j2': -0.5 * PI,  # Elbow
+    #     'right_j3': 0.5 * PI,  # Wrist 1
+    #     'right_j4': 0.5 * PI,  # Wrist 2
+    #     'right_j5': 0.0 * PI,  # Wrist 3
+    #     'right_j6': 1.05 * PI  # End effector rotation
+    # }
+    move_joints_to_angles(target_joint_angles)
 
 def gripper_init():
     """
@@ -350,7 +432,6 @@ def gripper_init():
     else:
         print('[DEBUG] Gripper not ready.')
 
-
 def gripper_control(action: str):
     """
     Controls the gripper (open or close).
@@ -366,6 +447,26 @@ def gripper_control(action: str):
     else:
         print(f'[DEBUG] Invalid action: {action}')
 
+############### MATH #################
+def add_waypoint_positions(waypoint1, waypoint2):
+    """
+    :Element by element addition of two vectors with length of 3
+    :both inputs are dictionaries of position and orientation. only the postition gets added
+    :return: List of added positions, orientation of position 1
+    """
+    if len(waypoint1['position']) != 3 or len(waypoint2['position']) != 3:
+        raise ValueError("Both input lists need to consist of a position with exactly 3 values (x, y, z).")
+
+    if 'orientation' not in waypoint1 or len(waypoint1['orientation']) != 4:
+        raise ValueError("Waypoint1 needs to contain an orientation of 4 values (x, y, z, w).")
+
+    # Positionen addieren
+    new_position = [waypoint1['position'][i] + waypoint2['position'][i] for i in range(3)]
+
+    # Orientierung unverändert übernehmen
+    new_orientation = waypoint1['orientation']
+
+    return {'position': new_position, 'orientation': new_orientation}
 
 def main():
     rospy.init_node('multi_pose_execution', anonymous=True)
@@ -374,45 +475,10 @@ def main():
 ############## Initialization #################
 ###############################################
 
-    print('[INFO] Moving limb to neutral position...')
-    limb_neutral_pos()
-    print('[INFO] Initializing and testing gripper...')
+
+    camera_neutral_pos()
     gripper_init()
-    # Example query of limb names
-    # limb = Limb()
-    # limbnames = limb.joint_names()
-    # rospy.loginfo(f"Limb names: {limbnames}")
-
-    # Move to waypoint template (example position and orientation)
-    # waypoint = {'position': [0.4, -0.3, 0.18], 'orientation': [0.0, 1.0, 0.0, 0.0]}
-    # rospy.loginfo(f"Move to waypoint with position: {waypoint['position']} and orientation: {waypoint['orientation']}")
-    # movement_success = move_to_position(waypoint['position'], waypoint['orientation'])
-    # if not movement_success:
-    #     rospy.logerr(f"Could not reach waypoint position: {waypoint['position']}")
-
-    # Another waypoint example
-    # waypoint = {'position': [0.476326, -0.1525, 0.3416], 'orientation': [0.0, 0.7071, 0.7071, 0.0]}
-    # rospy.loginfo(f"Move to waypoint, position: {waypoint['position']}, orientation: {waypoint['orientation']}")
-    # movement_success = move_to_position(waypoint['position'], waypoint['orientation'])
-    # if not movement_success:
-    #     rospy.logerr(f"Could not reach waypoint position: {waypoint['position']}")
-
-    # Example joint angles (in radians, 0.0 corresponds to 0°, 1.57 corresponds to 90°)
-    target_joint_angles = {
-        'right_j0': 0.16 * PI,  # Base rotation
-        'right_j1': 0.11 * PI,  # Shoulder movement
-        'right_j2': -0.44 * PI,  # Elbow
-        'right_j3': 0.67 * PI,  # Wrist 1
-        'right_j4': 0.61 * PI,  # Wrist 2
-        'right_j5': 0.0 * PI,   # Wrist 3
-        'right_j6': 0.05 * PI   # End effector rotation
-    }
-
-    success = move_joints_to_angles(target_joint_angles)
-    if success:
-        rospy.loginfo("Robot successfully positioned.")
-    else:
-        rospy.logerr("Error positioning the robot.")
+    # gripper_neutral_pos()
 
     # Get the current position of the robot
     current_pose = get_current_position()
@@ -457,7 +523,8 @@ def main():
         rospy.logerr(f"Error running detect.py: {e}")
         return
 
-    rospy.loginfo("Analysis complete. Results are located in the folder 'runs/detect/predict'.")
+    txt_folder = get_latest_predict_folder(txt_base_folder)
+    rospy.loginfo(f"Analysis complete. Results are located in the folder {txt_folder}.")
 
     # Find the latest generated TXT file with detection results
     detected_objects = parse_latest_detection(txt_folder)
@@ -473,8 +540,17 @@ def main():
 ################## Gameplay ###################
 ###############################################
 
-    print('[INFO] Moving limb to neutral position...')
-    limb_neutral_pos()
+    # move gripper to middle of board:
+    relative_waypoint = { 'position': [0.0, 0.0, 0.0], 'orientation': [1, 0, 0, 0]}
+    waypoint = add_waypoint_positions(default_gripper_waypoint, relative_waypoint)
+
+    rospy.loginfo(f"Move to waypoint, position: {waypoint['position']}, orientation: {waypoint['orientation']}")
+    movement_success = move_to_position(waypoint['position'], waypoint['orientation'])
+    if not movement_success:
+        rospy.logerr(f"Could not reach waypoint position: {waypoint['position']}")
+
+
+
     gripper_control("close")
     gripper_control("open")
     # Move the gripper down 90°
@@ -485,6 +561,9 @@ def main():
     # Example:
     # move_to_position([x, y, z], orientation)
     # Add logic for gripping or releasing objects
+
+
+    camera_neutral_pos()
 
 if __name__ == '__main__':
     main()
