@@ -7,6 +7,9 @@ import numpy as np
 from datetime import timedelta
 import json
 
+scripts_folder = os.path.dirname(os.path.abspath(__file__))
+os.chdir(scripts_folder)
+
 
 def save_json_output(data, source_path, is_video=False):
     import os
@@ -57,6 +60,7 @@ def process_image(frame, block_model, plate_model, previous_blocks=None, frame_c
         source=frame,
         show=False,
         save=True,
+        save_dir=f"{scripts_folder}/runs/detect/predict",
         conf=0.5
     )
     
@@ -64,6 +68,7 @@ def process_image(frame, block_model, plate_model, previous_blocks=None, frame_c
         source=frame,
         show=False,
         save=True,
+        save_dir=f"{scripts_folder}/runs/detect/predict",
         conf=0.5
     )
     
@@ -269,8 +274,8 @@ def draw_detections(frame, blocks, plates):
     return frame
 
 def detect(opt):
-    block_model = YOLO("block.pt")
-    plate_model = YOLO("plate.pt")
+    block_model = YOLO(f"{scripts_folder}/block.pt")
+    plate_model = YOLO(f"{scripts_folder}/plate.pt")
 
     previous_blocks = None
     all_blocks = []  # Store all blocks for JSON output
