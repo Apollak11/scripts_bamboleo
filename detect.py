@@ -172,8 +172,9 @@ def calculate_distance(block, plate):
     
     real_distance = image_distance * scale_ratio
     
-    x_axis_image_distance = object_center_x - circle_center_x
-    y_axis_image_distance = circle_center_y - object_center_y
+    # Edit coordinate system to the robot
+    x_axis_image_distance = circle_center_y - object_center_y 
+    y_axis_image_distance = circle_center_x - object_center_x
 
     x_axis_real_distance = x_axis_image_distance * scale_ratio
     y_axis_real_distance = y_axis_image_distance * scale_ratio
@@ -256,10 +257,10 @@ def draw_detections(frame, blocks, plates):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, f"dx: {x_axis_real_distance:.2f} cm", 
                     (text_start_x, text_start_y + 120),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
         cv2.putText(frame, f"dy: {y_axis_real_distance:.2f} cm", 
                     (text_start_x, text_start_y + 150),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         
         # Add ID and timestamp for video
         if 'id' in block:
