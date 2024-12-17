@@ -7,6 +7,8 @@ import cv2
 import os
 import subprocess
 import time
+import json
+import csv
 from intera_motion_interface import MotionTrajectory, MotionWaypoint, MotionWaypointOptions
 from intera_motion_msgs.msg import TrajectoryOptions
 from geometry_msgs.msg import PoseStamped
@@ -21,12 +23,13 @@ default_gripper_waypoint = {'position': [0.58, -0.01, 0.4], 'orientation': [0.97
 
 
 scripts_folder = os.path.dirname(os.path.abspath(__file__))
+csv_file_path = f"{scripts_folder}/block_measurement_data.csv"
 txt_base_folder = f"{scripts_folder}/runs/detect"
 image_folder = f"{scripts_folder}/takenImages"
 bridge = CvBridge()
 
 ########## OBJECT DETECTION #############
-
+### IMAGES
 def get_next_image_name(folder):
     """
     Determines the next available filename for an image.
@@ -127,83 +130,6 @@ def rotate_image(image, angle_rad):
 
     return rotated_image
 
-def parse_detection_txt(txt_path):
-    """
-    Reads a YOLO TXT file and returns a list of detected objects.
-
-    :param txt_path: Path to the TXT file.
-    :return: List of objects with properties.
-    """
-    objects = []
-
-    if not os.path.exists(txt_path):
-        print(f"File {txt_path} not found!")
-        return objects
-
-    with open(txt_path, 'r') as file:
-        lines = file.readlines()
-
-        for line in lines:
-            data = line.strip().split()  # Assumes data is space-separated
-            if len(data) < 6:
-                print(f"Invalid line: {line}")
-                continue
-
-            class_id, x_center, y_center, width, height, confidence = map(float, data[:6])
-
-            # Assemble object properties
-            obj = {
-                "id": int(class_id),  # Class ID as integer
-                "type": f"Type_{int(class_id)}",  # Class name (replace with actual names if available)
-                "position": {
-                    "x": x_center,
-                    "y": y_center
-                },
-                "size": {
-                    "width": width,
-                    "height": height
-                },
-                "confidence": confidence
-            }
-            objects.append(obj)
-
-    return objects
-
-def get_latest_txt_file(folder_path):
-    """
-    Finds the latest TXT file in a folder.
-
-    :param folder_path: Path to the folder containing TXT files.
-    :return: Path to the latest TXT file or None if no file is found.
-    """
-    if not os.path.exists(folder_path):
-        print(f"Folder {folder_path} not found!")
-        return None
-
-    txt_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.txt')]
-    if not txt_files:
-        print("No TXT files found in the folder!")
-        return None
-
-    # Find the file with the latest modification timestamp
-    latest_file = max(txt_files, key=os.path.getmtime)
-    return latest_file
-
-def parse_latest_detection(txt_folder):
-    """
-    Loads the latest TXT file in the folder and returns the detected objects.
-
-    :param txt_folder: Path to the folder with TXT files.
-    :return: List of detected objects.
-    """
-    latest_file = get_latest_txt_file(txt_folder)
-    if latest_file is None:
-        print("No valid TXT file found.")
-        return []
-
-    print(f"Latest file: {latest_file}")
-    return parse_detection_txt(latest_file)
-
 def get_latest_image(folder_path):
     """
     Finds the latest image file in a folder.
@@ -228,6 +154,7 @@ def get_latest_image(folder_path):
     latest_file = max(image_files, key=os.path.getmtime)
     return latest_file
 
+### JSON
 def get_latest_predict_folder(base_folder):
     """
     Finds the folder with the highest numeric suffix in the format 'predict', 'predict2', ..., 'predictN'.
@@ -258,6 +185,70 @@ def get_latest_predict_folder(base_folder):
     else:
         # Return the base folder if no 'predict' folders exist
         return base_folder
+
+def get_latest_json_file(folder_path):
+    """
+    Finds the latest JSON file in a folder.
+
+    :param folder_path: Path to the folder containing JSON files.
+    :return: Path to the latest JSON file or None if no file is found.
+    """
+    if not os.path.exists(folder_path):
+        print(f"Folder {folder_path} not found!")
+        return None
+
+    json_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.json')]
+    if not json_files:
+        print("No JSON files found in the folder!")
+        return None
+
+    # Find the file with the latest modification timestamp
+    latest_file = max(json_files, key=os.path.getmtime)
+    return latest_file
+
+def parse_detection_json(json_file):
+    """
+    Parses the detection information from a JSON file.
+
+    :param json_file: Path to the JSON file.
+    :return: List of parsed detected objects.
+    """
+    try:
+        with open(json_file, 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Error reading JSON file {json_file}: {e}")
+        return []
+
+    detected_objects = []
+    for obj in data:
+        parsed_obj = {
+            "type": obj.get("type"),
+            "color": obj.get("color"),
+            "real_distance": obj.get("distance_information", {}).get("real_distance"),
+            "x_axis_real_distance": obj.get("distance_information", {}).get("x_axis_real_distance"),
+            "y_axis_real_distance": obj.get("distance_information", {}).get("y_axis_real_distance"),
+            "block_width_cm": obj.get("distance_information", {}).get("block_width_cm"),
+            "block_height_cm": obj.get("distance_information", {}).get("block_height_cm")
+        }
+        detected_objects.append(parsed_obj)
+
+    return detected_objects
+
+def parse_latest_detection(json_folder):
+    """
+    Loads the latest JSON file in the folder and returns the detected objects.
+
+    :param json_folder: Path to the folder with JSON files.
+    :return: List of detected objects.
+    """
+    latest_file = get_latest_json_file(json_folder)
+    if latest_file is None:
+        print("No valid JSON file found.")
+        return []
+
+    print(f"Latest file: {latest_file}")
+    return parse_detection_json(latest_file)
 
 ########### ROBOT MOVEMENT #############
 ### Robot moves to the following defined Position and Orientation
@@ -468,8 +459,106 @@ def add_waypoint_positions(waypoint1, waypoint2):
 
     return {'position': new_position, 'orientation': new_orientation}
 
+
+############ GAME LOGIC ##############
+def parse_block_measurements(csv_file):
+    """
+    Parses block measurement data from a CSV file.
+
+    :param csv_file: Path to the CSV file.
+    :return: List of block measurement data.
+    """
+    blocks = []
+    try:
+        with open(csv_file, 'r') as f:
+            reader = csv.DictReader(f, delimiter=';')
+            for row in reader:
+                block = {
+                    "type": row["Exact block type"],
+                    "x": float(row["x"].replace(',', '.')),
+                    "y": float(row["y"].replace(',', '.')),
+                    "weight": float(row["weight (g)"].replace(',', '.'))
+                }
+                blocks.append(block)
+    except Exception as e:
+        print(f"Error reading CSV file {csv_file}: {e}")
+    return blocks
+
+def assign_detected_objects_to_blocks(detected_objects, block_measurements):
+    """
+    Assigns detected objects to the closest block measurement based on x and y distances.
+
+    :param detected_objects: List of detected objects with x_axis_real_distance and y_axis_real_distance.
+    :param block_measurements: List of blocks with x, y, and weight.
+    :return: List of detected objects with matched block types and weights.
+    """
+    for obj in detected_objects:
+        closest_block = None
+        min_distance = float('inf')
+        for block in block_measurements:
+            distance = abs(obj["x_axis_real_distance"] - block["x"]) + abs(obj["y_axis_real_distance"] - block["y"])
+            if distance < min_distance:
+                min_distance = distance
+                closest_block = block
+
+        if closest_block:
+            obj["exact_block_type"] = closest_block["type"]
+            obj["weight"] = closest_block["weight"]
+        else:
+            obj["exact_block_type"] = "Unknown"
+            obj["weight"] = 0.0
+    return detected_objects
+
+def sort_detected_objects_by_priority(detected_objects):
+    """
+    Sorts detected objects by grab priority (real_distance * weight).
+
+    :param detected_objects: List of detected objects with real_distance and weight.
+    :return: List of detected objects sorted by priority.
+    """
+    for obj in detected_objects:
+        obj["grab_prio"] = obj.get("real_distance", float('inf')) * obj.get("weight", 0.0)
+
+    sorted_objects = sorted(detected_objects, key=lambda x: x["grab_prio"])
+    return sorted_objects
+
+def move_robot_to_sorted_positions(sorted_objects, move_to_position_function):
+    """
+    Moves the robot to the sorted positions based on x and y values from the sorted_objects list.
+
+    :param sorted_objects: List of sorted detected objects containing x and y axis real distances.
+    :param move_to_position_function: Function to execute the robot movement.
+    """
+    relative_waypoint_put_down = {"position": [0.0, 0.4, 0.0], "orientation": [1, 0, 0, 0]}
+    waypoint_put_down = add_waypoint_positions(default_gripper_waypoint, relative_waypoint_put_down)
+    gripper = Gripper()
+
+    for idx, obj in enumerate(sorted_objects):
+        x_meters = obj.get("x_axis_real_distance", 0.0) / 100.0  # Convert cm to meters
+        y_meters = obj.get("y_axis_real_distance", 0.0) / 100.0  # Convert cm to meters
+
+        relative_waypoint = {"position": [x_meters, y_meters, 0.0], "orientation": [1, 0, 0, 0]}
+        waypoint = add_waypoint_positions(default_gripper_waypoint, relative_waypoint)
+        relative_waypoint_low = {"position": [x_meters, y_meters, -0.2], "orientation": [1, 0, 0, 0]}
+        waypoint_low = add_waypoint_positions(default_gripper_waypoint, relative_waypoint_low)
+
+        rospy.loginfo(f"Moving to waypoint {idx + 1}: Position: {waypoint['position']}, "
+                      f"Orientation: {waypoint['orientation']}, Block Type: {obj['exact_block_type']}")
+        move_to_position_function(waypoint['position'], waypoint['orientation'])
+        move_to_position_function(waypoint_low['position'], waypoint_low['orientation'])
+        gripper_control("close")
+        move_to_position_function(waypoint['position'], waypoint['orientation'])
+        move_to_position_function(waypoint_put_down['position'], waypoint_put_down['orientation'])
+        gripper_control("open")
+        move_to_position_function(default_gripper_waypoint['position'], default_gripper_waypoint['orientation'])
+
+        rospy.loginfo(f"Successfully reached waypoint {idx + 1}")
+
+    rospy.loginfo("Success (Maybe): Moved robot to all sorted positions")
+
 def main():
     rospy.init_node('multi_pose_execution', anonymous=True)
+
 
 ###############################################
 ############## Initialization #################
@@ -481,10 +570,10 @@ def main():
     # gripper_neutral_pos()
 
     # Get the current position of the robot
-    current_pose = get_current_position()
+    get_current_position()
 
     # Fetch the current joint angles of the robot
-    current_angles = get_current_joint_angles()
+    get_current_joint_angles()
 
 ###############################################
 ################# Get Image ###################
@@ -528,40 +617,47 @@ def main():
 
     # Find the latest generated TXT file with detection results
     detected_objects = parse_latest_detection(txt_folder)
-    rospy.loginfo(f"Detected objects: {detected_objects}")
-
     # Output the detected objects
     for obj in detected_objects:
         rospy.loginfo(
-            f"Object ID: {obj['id']}, Type: {obj['type']}, Position: {obj['position']}, Confidence: {obj['confidence']}"
+            f"Object Type: {obj['type']}, Color: {obj['color']}, Real Distance: {obj['real_distance']:.2f} m, "
+            f"X Real Distance: {obj['x_axis_real_distance']:.2f} m, Y Real Distance: {obj['y_axis_real_distance']:.2f} m"
         )
+
+
+    # Parse block measurements from the CSV file
+    block_measurements = parse_block_measurements(csv_file_path)
+
+    # Assign detected objects to the closest block measurements
+    matched_objects = assign_detected_objects_to_blocks(detected_objects, block_measurements)
+
+    # Sort detected objects by grab priority
+    sorted_objects = sort_detected_objects_by_priority(matched_objects)
+    for obj in sorted_objects:
+        rospy.loginfo(
+            f"Object Type: {obj['type']}, Color: {obj['color']}, Real Distance: {obj['real_distance']:.2f} m, "
+            f"X Real Distance: {obj['x_axis_real_distance']:.2f} m, Y Real Distance: {obj['y_axis_real_distance']:.2f} m, "
+            f"Block Type: {obj['exact_block_type']}, Weight: {obj['weight']:.2f} g, Priority: {obj['grab_prio']:.2f}"
+        )
+
+
 
 ###############################################
 ################## Gameplay ###################
 ###############################################
 
-    # move gripper to middle of board:
-    relative_waypoint = { 'position': [0.0, 0.0, 0.0], 'orientation': [1, 0, 0, 0]}
-    waypoint = add_waypoint_positions(default_gripper_waypoint, relative_waypoint)
+    # # move gripper to middle of board:
+    # relative_waypoint = { 'position': [0.0, 0.0, 0.0], 'orientation': [1, 0, 0, 0]}
+    # waypoint = add_waypoint_positions(default_gripper_waypoint, relative_waypoint)
+    #
+    # #Only to Debug:
+    # rospy.loginfo(f"Move to waypoint, position: {waypoint['position']}, orientation: {waypoint['orientation']}")
+    # movement_success = move_to_position(waypoint['position'], waypoint['orientation'])
+    # if not movement_success:
+    #     rospy.logerr(f"Could not reach waypoint position: {waypoint['position']}")
 
-    rospy.loginfo(f"Move to waypoint, position: {waypoint['position']}, orientation: {waypoint['orientation']}")
-    movement_success = move_to_position(waypoint['position'], waypoint['orientation'])
-    if not movement_success:
-        rospy.logerr(f"Could not reach waypoint position: {waypoint['position']}")
-
-
-
-    gripper_control("close")
-    gripper_control("open")
-    # Move the gripper down 90°
-    # Keep the orientation constant
-    # You can add specific movement commands here based on the detected objects
-
-    # Move to specific positions and open/close the gripper
-    # Example:
-    # move_to_position([x, y, z], orientation)
-    # Add logic for gripping or releasing objects
-
+    # Move robot to the sorted positions
+    move_robot_to_sorted_positions(sorted_objects, move_to_position)
 
     camera_neutral_pos()
 
