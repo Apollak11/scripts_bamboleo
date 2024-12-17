@@ -14,11 +14,11 @@ from intera_motion_msgs.msg import TrajectoryOptions
 from geometry_msgs.msg import PoseStamped
 from intera_interface import Limb, Gripper, RobotParams
 from cv_bridge import CvBridge, CvBridgeError
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image as Image
 
 
 PI = 3.1416
-image_rotation = -0.375  # a.k.a.: 0.5 - j_0 rotation
+image_rotation = 0.125 # a.k.a.:j_0 rotation
 default_gripper_waypoint = {'position': [0.58, -0.01, 0.4], 'orientation': [0.97915, 0.2031, -0.0024, 0.0019]}
 
 
@@ -26,8 +26,6 @@ scripts_folder = os.path.dirname(os.path.abspath(__file__))
 csv_file_path = f"{scripts_folder}/block_measurement_data.csv"
 txt_base_folder = f"{scripts_folder}/json"
 image_folder = f"{scripts_folder}/takenImages"
-max_image_age = 60
-image_saved = False
 bridge = CvBridge()
 
 ########## OBJECT DETECTION #############
@@ -77,102 +75,39 @@ def get_next_image_name(folder):
 
     return next_image_path
 
-# def take_image(msg):
-#     """
-#     Callback function to receive and save the latest image.
-#
-#     :param msg: The ROS image message.
-#     """
-#     global latest_image_time, image_saved
-#
-#     # Prüfe, ob bereits ein Bild gespeichert wurde
-#     if image_saved:
-#         rospy.logwarn("Image already saved. Ignoring further messages.")
-#         return
-#
-#     # Aktuellen Zeitstempel aus der Nachricht holen
-#     current_image_time = msg.header.stamp.to_sec()
-#     rospy.loginfo(f"Received image timestamp: {current_image_time}")
-#
-#     # Vergleiche den Zeitstempel mit dem zuletzt gespeicherten Zeitstempel
-#     if latest_image_time and current_image_time <= latest_image_time:
-#         rospy.logwarn("Skipping older image based on timestamp.")
-#         return
-#
-#     # Aktualisiere den neuesten Zeitstempel
-#     latest_image_time = current_image_time
-#
-#     os.makedirs(image_folder, exist_ok=True)  # Ordner erstellen, falls er nicht existiert
-#
-#     print("Received an image!")
-#     try:
-#         # Konvertiere ROS Image in OpenCV2
-#         cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
-#     except CvBridgeError as e:
-#         rospy.logerr(f"Error converting ROS image: {e}")
-#         return
-#
-#     # Drehe das Bild
-#     rotated_img = rotate_image(cv2_img, image_rotation * 3.1416)
-#
-#     # Speichere das Bild
-#     image_path = os.path.join(image_folder, f"image_{int(current_image_time)}.png")
-#     cv2.imwrite(image_path, rotated_img)
-#     rospy.loginfo(f"Image saved to: {image_path}")
-#
-#     # Setze das Flag und stoppe die ROS-Node
-#     image_saved = True
-#     rospy.loginfo("Image successfully captured. Shutting down subscriber.")
-#     rospy.signal_shutdown("Image saved, stopping subscriber.")
-
 def take_image(msg):
     """
-    Callback function to receive and save the latest image within a certain time frame.
+    Callback function to receive and save an image.
 
     :param msg: The ROS image message.
     """
-    global image_saved
 
-    if image_saved:
-        #rospy.loginfo("Image already saved. Ignoring further messages.")
-        return
+    os.makedirs(image_folder, exist_ok=True)  # Create folder if it doesn't exist
 
-    # Get the image timestamp
-    current_time = rospy.Time.now().to_sec()  # Current system time
-    image_time = msg.header.stamp.to_sec()   # Time from the message
-
-    # Check if the image is fresh (not older than 60 seconds)
-    if current_time - image_time > max_image_age:
-        rospy.logwarn("Received image is too old. Skipping.")
-        return
-
-    # Ensure the folder exists
-    os.makedirs(image_folder, exist_ok=True)
-
+    print("Received an image!")
     try:
-        # Convert ROS Image message to OpenCV2 format
+        # Convert ROS Image Message to OpenCV2
         cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
-    except CvBridgeError as e:
-        rospy.logerr(f"Error converting ROS image: {e}")
-        return
+    except Exception as e:
+        print(f"Error converting ROS image: {e}")
+    else:
+        # Rotate the image by 0.125 * PI counterclockwise
+        rotated_img = rotate_image(cv2_img, image_rotation * PI)
 
-    # Rotate the image
-    rotated_img = rotate_image(cv2_img, image_rotation * PI)
+        # Determine the next filename
+        image_path = get_next_image_name(image_folder)
 
-    # Determine the next sequential filename
-    image_path = get_next_image_name(image_folder)
-
-    # Save the image
-    cv2.imwrite(image_path, rotated_img)
-    rospy.loginfo(f"Image saved to: {image_path}")
-
-    # Set the flag and stop further callbacks
-    image_saved = True
-    # rospy.signal_shutdown("Image successfully captured. Shutting down subscriber.")
+        # Save the rotated image
+        cv2.imwrite(image_path, rotated_img)
+        print(f"Image saved: {image_path}")
+        time.sleep(5)  # so the new image gets saved appropriately before further execution of code
+        rospy.signal_shutdown("Image captured and saved")
 
 def rotate_image(image, angle_rad):
     """
-    Rotates an image counterclockwise by a given angle in radians around a specific point.
+    since we take the image with a rotation (because we cant set up the table otherwise)
+    we need to rotate the image:
+    Rotates an image counterclockwise by a given angle in radians.
 
     :param image: The input image (OpenCV format).
     :param angle_rad: The rotation angle in radians.
@@ -184,13 +119,13 @@ def rotate_image(image, angle_rad):
     # Get the image dimensions
     (h, w) = image.shape[:2]
 
-    # Define the rotation point (custom coordinates: x=380, y=215)
-    rotation_point = (380, 215)
+    # Get the center of the image
+    center = (w // 2, h // 2)
 
-    # Compute the rotation matrix using the specified rotation point
-    rotation_matrix = cv2.getRotationMatrix2D(rotation_point, angle_deg, 1.0)
+    # Compute the rotation matrix
+    rotation_matrix = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
 
-    # Perform the rotation with the adjusted rotation point
+    # Perform the rotation
     rotated_image = cv2.warpAffine(image, rotation_matrix, (w, h))
 
     return rotated_image
@@ -288,14 +223,14 @@ def parse_detection_json(json_file):
     detected_objects = []
 
     #### Right now, x and y values are swapped between the detection and the Robot coordinate system.
-
+    #### This is a quick fix, but should be repaired cleaner in future versions
     for obj in data:
         parsed_obj = {
             "type": obj.get("type"),
             "color": obj.get("color"),
             "real_distance": obj.get("distance_information", {}).get("real_distance"),
-            "x_axis_real_distance": obj.get("distance_information", {}).get("x_axis_real_distance"),
-            "y_axis_real_distance": obj.get("distance_information", {}).get("y_axis_real_distance"),
+            "x_axis_real_distance": obj.get("distance_information", {}).get("y_axis_real_distance"),
+            "y_axis_real_distance": obj.get("distance_information", {}).get("x_axis_real_distance"),
             "block_width_cm": obj.get("distance_information", {}).get("block_width_cm"),
             "block_height_cm": obj.get("distance_information", {}).get("block_height_cm")
         }
@@ -450,7 +385,7 @@ def gripper_neutral_pos():
 
 def camera_neutral_pos():
     target_joint_angles = {
-        'right_j0': 0.125 * PI,  # Base rotation, global variable image_rotation
+        'right_j0': image_rotation * PI,  # Base rotation, global variable image_rotation
         'right_j1': -0.05 * PI,  # Shoulder movement
         'right_j2': -0.5 * PI,  # Elbow
         'right_j3': 0.5 * PI,  # Wrist 1
@@ -607,7 +542,7 @@ def move_robot_to_sorted_positions(sorted_objects, move_to_position_function):
 
         relative_waypoint = {"position": [x_meters, y_meters, 0.0], "orientation": [1, 0, 0, 0]}
         waypoint = add_waypoint_positions(default_gripper_waypoint, relative_waypoint)
-        relative_waypoint_low = {"position": [x_meters, y_meters, -0.21], "orientation": [1, 0, 0, 0]}
+        relative_waypoint_low = {"position": [x_meters, y_meters, -0.2], "orientation": [1, 0, 0, 0]}
         waypoint_low = add_waypoint_positions(default_gripper_waypoint, relative_waypoint_low)
 
         rospy.loginfo(f"Moving to waypoint {idx + 1}: Position: {waypoint['position']}, "
@@ -627,64 +562,54 @@ def move_robot_to_sorted_positions(sorted_objects, move_to_position_function):
 def main():
     rospy.init_node('multi_pose_execution', anonymous=True)
 
+# # ###############################################
+# # ############## Initialization #################
+# # ###############################################
+#
+#     camera_neutral_pos()
+#     gripper_init()
+#     # gripper_neutral_pos()
+#
+# # ###############################################
+# # ################# Get Image ###################
+# # ###############################################
+#
+#     # Define the image topic
+#     image_topic = "/io/internal_camera/right_hand_camera/image_raw"
+#
+#     # Set up the subscriber for the image topic with the callback
+#     # Receives and saves the image
+#     rospy.Subscriber(image_topic, Image, take_image)
+#     print("Waiting for an image...")
+#     # # Keep spinning until shutdown (e.g., manually with Ctrl+C)
+#     # rospy.spin()
+#
 # ###############################################
-# ############## Initialization #################
+# ################# Detection ###################
 # ###############################################
-
-    # # Keep spinning until shutdown (e.g., manually with Ctrl+C)
-    # rospy.spin()
-    camera_neutral_pos()
-    gripper_init()
-    # gripper_neutral_pos()
-
-# ###############################################
-# ################# Get Image ###################
-# ###############################################
-
-    # Define the image topic
-    image_topic = "/io/internal_camera/right_hand_camera/image_raw"
-
-    global image_saved
-    # Set up the subscriber for the image topic with the callback
-    # Receives and saves the image
-    # Subscribe to the image topic
-    rospy.Subscriber(image_topic, Image, take_image)
-    rospy.loginfo("Subscribed to the image topic. Waiting for a valid image...")
-
-    # Spin until the image is saved and the node shuts down
-    while not image_saved:
-        rospy.sleep(2)  # Prevent high CPU usage
-
-    rospy.loginfo("Node has been successfully shut down after saving the image.")
-
-    rospy.loginfo("Image successfully saved. Node is shutting down.")
-
-###############################################
-################# Detection ###################
-###############################################
-
-    rospy.loginfo("Waiting for 15 seconds to ensure that the most recent image in the repo gets used")
-    rospy.sleep(15)
-    # Find the latest image to analyze
-
-    latest_image = get_latest_image(image_folder)
-    if latest_image is None:
-        rospy.logerr("No valid image found!")
-        return
-
-
-
-    rospy.loginfo(f"Analyzing the latest image: {latest_image} /n Press Q to shut down detection window")
-
-    # Run detect.py with the latest image
-    try:
-        subprocess.run(
-            ["python3", f"{scripts_folder}/detect.py", "--source", latest_image],
-            check=True
-        )
-    except subprocess.CalledProcessError as e:
-        rospy.logerr(f"Error running detect.py: {e}")
-        return
+#
+#     rospy.loginfo("Waiting for 30 seconds to ensure that the most recent image in the repo gets used")
+#     rospy.sleep(30)
+#     # Find the latest image to analyze
+#
+#     latest_image = get_latest_image(image_folder)
+#     if latest_image is None:
+#         rospy.logerr("No valid image found!")
+#         return
+#
+#
+#
+#     rospy.loginfo(f"Analyzing the latest image: {latest_image} /n Press Q to shut down detection window")
+#
+#     # Run detect.py with the latest image
+#     try:
+#         subprocess.run(
+#             ["python3", f"{scripts_folder}/detect.py", "--source", latest_image],
+#             check=True
+#         )
+#     except subprocess.CalledProcessError as e:
+#         rospy.logerr(f"Error running detect.py: {e}")
+#         return
 
     txt_folder = get_latest_predict_folder(txt_base_folder)
     rospy.loginfo(f"Analysis complete. Results are located in the folder {txt_folder}.")
@@ -710,20 +635,17 @@ def main():
         rospy.loginfo(
             f"Object Type: {obj['type']}, Color: {obj['color']}, Real Distance: {obj['real_distance']:.2f} m, "
             f"X Real Distance: {obj['x_axis_real_distance']:.2f} m, Y Real Distance: {obj['y_axis_real_distance']:.2f} m, "
-            f"Block Type: {obj['exact_block_type']}, Weight: {obj['weight']:.2f} g, Priority: {100/obj['grab_prio']:.2f}"
+            f"Block Type: {obj['exact_block_type']}, Weight: {obj['weight']:.2f} g, Priority: {obj['grab_prio']:.2f}"
         )
 
 ###############################################
 ################## Gameplay ###################
 ###############################################
 
-    # Sleep so random ros queues dont destroy out program
-    rospy.sleep(30)
     # Move robot to the sorted positions
     move_robot_to_sorted_positions(sorted_objects, move_to_position)
-    camera_neutral_pos()
 
-    rospy.signal_shutdown("Program finished executing, Rospy is shut down.")
+    camera_neutral_pos()
 
 
 if __name__ == '__main__':

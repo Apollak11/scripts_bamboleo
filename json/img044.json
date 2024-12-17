@@ -1,0 +1,89 @@
+[
+    {
+        "type": "cone",
+        "color": "red",
+        "position": {
+            "x": 501.0350036621094,
+            "y": 208.7095718383789
+        },
+        "dimensions_pixels": {
+            "width": 72.70355224609375,
+            "height": 61.20851135253906
+        },
+        "confidence": 0.91,
+        "distance_information": {
+            "circle_center_x": 374.4134216308594,
+            "circle_center_y": 212.80062866210938,
+            "circle_image_diameter": 436.10443115234375,
+            "object_center_x": 501.0350036621094,
+            "object_center_y": 208.7095718383789,
+            "image_distance": 126.6876544183827,
+            "scale_ratio": 0.08254903511270256,
+            "real_distance": 10.457943632929002,
+            "x_axis_image_distance": 126.62158203125,
+            "y_axis_image_distance": 4.091056823730469,
+            "x_axis_real_distance": 10.452489421123603,
+            "y_axis_real_distance": 0.3377127933901879,
+            "block_width_cm": 6.0016080871809985,
+            "block_height_cm": 5.052703552837
+        }
+    },
+    {
+        "type": "cone",
+        "color": "red",
+        "position": {
+            "x": 459.45452880859375,
+            "y": 346.1231994628906
+        },
+        "dimensions_pixels": {
+            "width": 46.71893310546875,
+            "height": 45.76776123046875
+        },
+        "confidence": 0.87,
+        "distance_information": {
+            "circle_center_x": 374.4134216308594,
+            "circle_center_y": 212.80062866210938,
+            "circle_image_diameter": 436.10443115234375,
+            "object_center_x": 459.45452880859375,
+            "object_center_y": 346.1231994628906,
+            "image_distance": 158.1356942468848,
+            "scale_ratio": 0.08254903511270256,
+            "real_distance": 13.05394897695769,
+            "x_axis_image_distance": 85.04110717773438,
+            "y_axis_image_distance": 133.32257080078125,
+            "x_axis_real_distance": 7.020061342437897,
+            "y_axis_real_distance": 11.005649578349464,
+            "block_width_cm": 3.856602849351342,
+            "block_height_cm": 3.7780845288437517
+        }
+    },
+    {
+        "type": "cone",
+        "color": "unknown",
+        "position": {
+            "x": 331.97901916503906,
+            "y": 153.00046157836914
+        },
+        "dimensions_pixels": {
+            "width": 54.649993896484375,
+            "height": 53.499107360839844
+        },
+        "confidence": 0.67,
+        "distance_information": {
+            "circle_center_x": 374.4134216308594,
+            "circle_center_y": 212.80062866210938,
+            "circle_image_diameter": 436.10443115234375,
+            "object_center_x": 331.97901916503906,
+            "object_center_y": 153.00046157836914,
+            "image_distance": 73.32624697797144,
+            "scale_ratio": 0.08254903511270256,
+            "real_distance": 6.053010936467264,
+            "x_axis_image_distance": 42.43440246582031,
+            "y_axis_image_distance": 59.800167083740234,
+            "x_axis_real_distance": 3.502918979137553,
+            "y_axis_real_distance": 4.936446092341153,
+            "block_width_cm": 4.511304265069869,
+            "block_height_cm": 4.416299692028212
+        }
+    }
+]

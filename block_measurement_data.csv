@@ -1,7 +1,7 @@
-﻿Exact block type;x;y;weight (g)
-cube 1;2;2;5
-cube 2;2,5;2,5;9,5
-cube 3;3;3;13
+﻿Exact_block_type;x;y;weight(g)
+cube_1;2;2;5
+cube_2;2,5;2,5;9,5
+cube_3;3;3;13
 cuboid;6;3;27
 cylinder 1;2,5;2,5;9
 cylinder 2;3;3;14

@@ -1,0 +1,31 @@
+[
+    {
+        "type": "cone",
+        "color": "red",
+        "position": {
+            "x": 288.79933166503906,
+            "y": 309.1002197265625
+        },
+        "dimensions_pixels": {
+            "width": 68.86080932617188,
+            "height": 67.8394775390625
+        },
+        "confidence": 0.77,
+        "distance_information": {
+            "circle_center_x": 385.5960388183594,
+            "circle_center_y": 223.96412134170532,
+            "circle_image_diameter": 437.22186279296875,
+            "object_center_x": 288.79933166503906,
+            "object_center_y": 309.1002197265625,
+            "image_distance": 128.90988233615658,
+            "scale_ratio": 0.08233806006413397,
+            "real_distance": 10.614189634654903,
+            "x_axis_image_distance": -85.13609838485718,
+            "y_axis_image_distance": 96.79670715332031,
+            "x_axis_real_distance": -7.009941182438389,
+            "y_axis_real_distance": 7.970053087600474,
+            "block_width_cm": 5.669865454363216,
+            "block_height_cm": 5.585770976330795
+        }
+    }
+]
