@@ -167,8 +167,9 @@ def calculate_distance(block, plate):
     
     real_distance = image_distance * scale_ratio
     
-    x_axis_image_distance = abs(circle_center_x - object_center_x)
-    y_axis_image_distance = abs(circle_center_y - object_center_y)
+    x_axis_image_distance = object_center_x - circle_center_x
+    y_axis_image_distance = circle_center_y - object_center_y
+
     x_axis_real_distance = x_axis_image_distance * scale_ratio
     y_axis_real_distance = y_axis_image_distance * scale_ratio
 
@@ -231,6 +232,10 @@ def draw_detections(frame, blocks, plates):
         text_start_x = frame.shape[1] - 300
         text_start_y = frame.shape[0] // 2 - 50
         
+         # 確定方向，顯示正負號
+        dx_direction = "+" if distance_information['x_axis_real_distance'] >= 0 else "-"
+        dy_direction = "+" if distance_information['y_axis_real_distance'] >= 0 else "-"
+
         # Display text
         cv2.putText(frame, f"Type: {block['type']}", 
                     (text_start_x, text_start_y),
