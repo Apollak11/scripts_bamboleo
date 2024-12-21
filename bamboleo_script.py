@@ -598,7 +598,7 @@ def move_robot_to_sorted_positions(sorted_objects, move_to_position_function):
 
         relative_waypoint = {"position": [x_meters, y_meters, 0.0], "orientation": [1, 0, 0, 0]}
         waypoint = add_waypoint_positions(default_gripper_waypoint, relative_waypoint)
-        relative_waypoint_low = {"position": [x_meters, y_meters, -0.21], "orientation": [1, 0, 0, 0]}
+        relative_waypoint_low = {"position": [x_meters, y_meters, -0.205], "orientation": [1, 0, 0, 0]}
         waypoint_low = add_waypoint_positions(default_gripper_waypoint, relative_waypoint_low)
 
         rospy.loginfo(f"Moving to waypoint {idx + 1}: Position: {waypoint['position']}, "
