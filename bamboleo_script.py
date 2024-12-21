@@ -450,7 +450,7 @@ def gripper_neutral_pos():
 
 def camera_neutral_pos():
     target_joint_angles = {
-        'right_j0': 0.125 * PI,  # Base rotation, global variable image_rotation
+        'right_j0': 0.125 * PI,  # Base rotation
         'right_j1': -0.05 * PI,  # Shoulder movement
         'right_j2': -0.5 * PI,  # Elbow
         'right_j3': 0.5 * PI,  # Wrist 1
@@ -458,16 +458,7 @@ def camera_neutral_pos():
         'right_j5': 0.0 * PI,  # Wrist 3
         'right_j6': 1.05 * PI  # End effector rotation
     }
-    # ## Peer-Oles angles
-    # target_joint_angles = {
-    #     'right_j0': 0.125 * PI,  # Base rotation
-    #     'right_j1': -0.0 * PI,  # Shoulder movement
-    #     'right_j2': -0.5 * PI,  # Elbow
-    #     'right_j3': 0.5 * PI,  # Wrist 1
-    #     'right_j4': 0.5 * PI,  # Wrist 2
-    #     'right_j5': 0.0 * PI,  # Wrist 3
-    #     'right_j6': 1.05 * PI  # End effector rotation
-    # }
+
     move_joints_to_angles(target_joint_angles)
 
 def gripper_init():
